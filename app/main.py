@@ -50,22 +50,22 @@ class MainWindow(QWidget):
 
         self.session = crear_sesion_coes()
 
-    def descargar_archivo_tipo(self, tipo, archivo, carpeta_dia):
+    def descargar_archivo_tipo(self, tipo, archivo, carpeta_mes):
         """
-        Ejecuta la descarga según el tipo (ieod, zip o pod).
-        Se ejecuta en un hilo del ThreadPoolExecutor.
-        Devuelve True si se guardó correctamente.
+        Descarga el archivo con su nombre original, sin subcarpetas por día.
         """
         try:
-            nombre = archivo["nombre"].lower()
+            nombre = archivo["nombre"]
+            nombre_lower = nombre.lower()
 
-            if tipo == "ieod" and nombre.startswith("anexoa") and nombre.endswith(".xlsx"):
-                destino = os.path.join(carpeta_dia, archivo["nombre"])
+            destino = os.path.join(carpeta_mes, nombre)
+
+            if tipo == "ieod" and nombre_lower.startswith("anexoa") and nombre_lower.endswith(".xlsx"):
                 descargar_archivo(archivo["ruta"], destino)
                 return True
 
-            if tipo == "ieod" and nombre.endswith(".zip"):
-                zip_temp = os.path.join(carpeta_dia, archivo["nombre"])
+            if tipo == "ieod" and nombre_lower.endswith(".zip"):
+                zip_temp = destino + ".tmp.zip"
                 ok = descargar_zip_real_con_sesion(self.session, archivo["ruta"], zip_temp)
 
                 if not ok:
@@ -76,8 +76,9 @@ class MainWindow(QWidget):
                     if not xlsx_files:
                         return False
 
-                    destino = os.path.join(carpeta_dia, os.path.basename(xlsx_files[0]))
-                    with open(destino, "wb") as out:
+                    destino_xlsx = os.path.join(carpeta_mes, os.path.basename(xlsx_files[0]))
+
+                    with open(destino_xlsx, "wb") as out:
                         out.write(z.read(xlsx_files[0]))
 
                 try:
@@ -86,9 +87,8 @@ class MainWindow(QWidget):
                     pass
 
                 return True
-
+            
             if tipo == "pod":
-                destino = os.path.join(carpeta_dia, archivo["nombre"])
                 descargar_archivo(archivo["ruta"], destino)
                 return True
 
@@ -135,8 +135,8 @@ class MainWindow(QWidget):
         anio = self.list_anios.selectedItems()[0].text()
         mes = self.list_meses.selectedItems()[0].text()
 
-        carpeta = QFileDialog.getExistingDirectory(self, "Carpeta destino")
-        if not carpeta:
+        carpeta_mes = QFileDialog.getExistingDirectory(self, "Carpeta destino")
+        if not carpeta_mes:
             return
 
         dias = obtener_dias(anio, mes)
@@ -146,22 +146,16 @@ class MainWindow(QWidget):
 
         for d in dias:
 
-            carpeta_dia = os.path.join(carpeta, d)
-            os.makedirs(carpeta_dia, exist_ok=True)
-
             archivos_ieod = obtener_archivos_del_dia(anio, mes, d)
-
             archivos_pod = pod_obtener_archivo_despacho(anio, mes, d)
 
             for a in archivos_ieod:
-                nombre = a["nombre"].lower()
-                if nombre.endswith(".pdf"):
-                    continue
-                tareas.append(("ieod", a, carpeta_dia))
-                total_archivos += 1
+                if not a["nombre"].lower().endswith(".pdf"):
+                    tareas.append(("ieod", a, carpeta_mes))
+                    total_archivos += 1
 
             for a in archivos_pod:
-                tareas.append(("pod", a, carpeta_dia))
+                tareas.append(("pod", a, carpeta_mes))
                 total_archivos += 1
 
         if total_archivos == 0:
@@ -175,8 +169,8 @@ class MainWindow(QWidget):
         executor = ThreadPoolExecutor(max_workers=5)
         futures = []
 
-        for tipo, archivo, carpeta_dia in tareas:
-            f = executor.submit(self.descargar_archivo_tipo, tipo, archivo, carpeta_dia)
+        for tipo, archivo, carpeta_mes in tareas:
+            f = executor.submit(self.descargar_archivo_tipo, tipo, archivo, carpeta_mes)
             futures.append(f)
 
         for future in as_completed(futures):
