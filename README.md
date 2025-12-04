@@ -43,7 +43,7 @@ Velocidad **3× a 7× más rápida**
 ### 1️⃣ Clonar el repositorio
 
 ``` bash
-git clone https://github.com/<TU_USUARIO>/coes_downloader.git
+git clone https://github.com/RommelPa/coes_downloader.git
 cd coes_downloader
 ```
 
